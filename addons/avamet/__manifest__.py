@@ -17,9 +17,9 @@ Gestió de lectures meteorològiques, imatges de càmera i resums diaris d'AVAME
     'data': [
         'security/ir.model.access.csv',
         'views/views.xml',
+        'demo/avamet.reading.csv',
     ],
     'demo': [
-        'demo/avamet.reading.csv',
         'demo/avamet_images.xml',
     ],
     'installable': True,
