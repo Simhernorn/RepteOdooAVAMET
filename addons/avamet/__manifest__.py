@@ -19,7 +19,7 @@ Gestió de lectures meteorològiques, imatges de càmera i resums diaris d'AVAME
         'views/views.xml',
     ],
     'demo': [
-        'demo/demo_reading.csv',
+        'demo/avamet.reading.csv',
     ],
     'installable': True,
     'application': True,
