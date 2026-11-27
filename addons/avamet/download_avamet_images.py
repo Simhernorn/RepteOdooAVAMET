@@ -36,8 +36,6 @@ JPEG_QUALITY = 55
 REQUEST_TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024
 MAX_IMAGE_PIXELS = 30_000_000
-RECENT_DAY_COUNT = 3
-MAX_READINGS_PER_DAY = 5
 
 RECORD_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 IMAGE_FILENAME_PATTERN = re.compile(
@@ -136,25 +134,6 @@ def read_demo_csv(csv_path: Path) -> list[DemoReading]:
             )
 
     return readings
-
-
-def select_recent_readings(readings: list[DemoReading]) -> list[DemoReading]:
-    recent_days = sorted({reading.timestamp.date() for reading in readings}, reverse=True)[
-        :RECENT_DAY_COUNT
-    ]
-    selected_per_day = {day: 0 for day in recent_days}
-    selected = []
-
-    for reading in sorted(
-        readings,
-        key=lambda item: (item.timestamp, item.external_id),
-        reverse=True,
-    ):
-        day = reading.timestamp.date()
-        if day in selected_per_day and selected_per_day[day] < MAX_READINGS_PER_DAY:
-            selected.append(reading)
-            selected_per_day[day] += 1
-    return selected
 
 
 def image_url(filename: str) -> str:
@@ -354,24 +333,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        all_readings = read_demo_csv(DEMO_CSV)
-        readings = select_recent_readings(all_readings)
+        readings = read_demo_csv(DEMO_CSV)
         filenames = {
             filename
             for reading in readings
             for _, filename in reading.image_fields
         }
         if args.dry_run:
-            selected_days = sorted(
-                {reading.timestamp.date() for reading in readings}, reverse=True
-            )
-            print(f"Demo records checked: {len(all_readings)}")
-            print(
-                f"Recent records selected: {len(readings)} "
-                f"(up to {MAX_READINGS_PER_DAY} per day for {RECENT_DAY_COUNT} days)"
-            )
-            print("Selected dates: " + ", ".join(day.isoformat() for day in selected_days))
-            print(f"Unique camera images planned: {len(filenames)} (maximum 30)")
+            print(f"Demo records checked: {len(readings)}")
+            print(f"Unique camera images planned: {len(filenames)}")
             print(f"Image output directory: {IMAGE_DIRECTORY}")
             print(f"XML overlay: {OVERLAY_XML}")
             print("Dry run: no network requests and no files changed.")
