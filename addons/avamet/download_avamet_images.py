@@ -54,6 +54,10 @@ class DownloadError(Exception):
     """Raised when an image cannot be fetched or safely processed."""
 
 
+class InvalidImageError(DownloadError):
+    """Raised when a response is not a complete, decodable JPEG."""
+
+
 class RejectRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, request, file_pointer, code, message, headers, new_url):
         raise urllib.error.HTTPError(
@@ -181,7 +185,7 @@ def fetch_image(
         with opener.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
             content_type = response.headers.get_content_type()
             if content_type not in ("image/jpeg", "image/pjpeg", "application/octet-stream"):
-                raise DownloadError(
+                raise InvalidImageError(
                     f"Unexpected content type for {filename}: {content_type}."
                 )
             content_length = response.headers.get("Content-Length")
@@ -208,9 +212,18 @@ def fetch_image(
 
 def resize_jpeg(content: bytes, image_module, image_ops_module) -> bytes:
     try:
+        with image_module.open(BytesIO(content)) as probe:
+            if probe.format != "JPEG":
+                raise InvalidImageError("Response content is not a JPEG.")
+            if probe.width * probe.height > MAX_IMAGE_PIXELS:
+                raise InvalidImageError("Source image exceeds the pixel-count limit.")
+            probe.verify()
+
         with image_module.open(BytesIO(content)) as source:
+            if source.format != "JPEG":
+                raise InvalidImageError("Response content is not a JPEG.")
             if source.width * source.height > MAX_IMAGE_PIXELS:
-                raise DownloadError("Source image exceeds the pixel-count limit.")
+                raise InvalidImageError("Source image exceeds the pixel-count limit.")
             source.load()
             image = image_ops_module.exif_transpose(source)
             if "A" in image.getbands():
@@ -225,10 +238,18 @@ def resize_jpeg(content: bytes, image_module, image_ops_module) -> bytes:
             output = BytesIO()
             image.save(output, format="JPEG", quality=JPEG_QUALITY, optimize=True)
             return output.getvalue()
-    except DownloadError:
+    except InvalidImageError:
         raise
-    except (OSError, ValueError, image_module.DecompressionBombError) as error:
-        raise DownloadError(f"Source image is not a valid, safe JPEG: {error}") from error
+    except (
+        EOFError,
+        OSError,
+        SyntaxError,
+        ValueError,
+        image_module.DecompressionBombError,
+    ) as error:
+        raise InvalidImageError(
+            f"Source image is not a complete, safe JPEG: {error}"
+        ) from error
 
 
 def is_ready_jpeg(path: Path, image_module) -> bool:
@@ -239,12 +260,24 @@ def is_ready_jpeg(path: Path, image_module) -> bool:
             image_format = image.format
             width, height = image.size
             image.verify()
-        return (
-            image_format == "JPEG"
-            and width <= IMAGE_SIZE[0]
-            and height <= IMAGE_SIZE[1]
-        )
-    except (OSError, ValueError, image_module.DecompressionBombError):
+        if (
+            image_format != "JPEG"
+            or width > IMAGE_SIZE[0]
+            or height > IMAGE_SIZE[1]
+        ):
+            return False
+        with image_module.open(path) as image:
+            if image.format != "JPEG":
+                return False
+            image.load()
+        return True
+    except (
+        EOFError,
+        OSError,
+        SyntaxError,
+        ValueError,
+        image_module.DecompressionBombError,
+    ):
         return False
 
 
@@ -268,6 +301,7 @@ def write_overlay(
     readings: list[DemoReading],
     image_directory: Path,
     overlay_path: Path,
+    available_images: set[str],
 ) -> int:
     root = ET.Element("odoo")
     data = ET.SubElement(root, "data", {"noupdate": "0"})
@@ -276,6 +310,8 @@ def write_overlay(
     for reading in readings:
         existing_images = []
         for field_name, filename in reading.image_fields:
+            if filename not in available_images:
+                continue
             image_path = image_directory / filename
             if image_path.is_symlink():
                 raise DownloadError(f"Refusing a symlink image path: {image_path}")
@@ -313,6 +349,47 @@ def write_overlay(
     tree.write(output, encoding="utf-8", xml_declaration=True)
     write_atomic(overlay_path, output.getvalue())
     return updated_records
+
+
+def download_images(
+    filenames: set[str],
+    image_directory: Path,
+    opener: urllib.request.OpenerDirector,
+    image_module,
+    image_ops_module,
+) -> tuple[set[str], int, int, int]:
+    available_images = set()
+    downloaded = 0
+    cached = 0
+    skipped = 0
+
+    for index, filename in enumerate(sorted(filenames), start=1):
+        image_path = image_directory / filename
+        if image_path.is_symlink():
+            raise DownloadError(f"Refusing a symlink image path: {image_path}")
+        if is_ready_jpeg(image_path, image_module):
+            cached += 1
+            available_images.add(filename)
+            continue
+
+        try:
+            raw_image = fetch_image(filename, opener)
+            resized_image = resize_jpeg(raw_image, image_module, image_ops_module)
+        except InvalidImageError as error:
+            print(
+                f"Warning: skipping invalid or truncated image {filename}: {error}",
+                file=sys.stderr,
+            )
+            skipped += 1
+            continue
+
+        write_atomic(image_path, resized_image)
+        available_images.add(filename)
+        downloaded += 1
+        if index % 100 == 0 or index == len(filenames):
+            print(f"Processed {index}/{len(filenames)} image files...")
+
+    return available_images, downloaded, cached, skipped
 
 
 def parse_args() -> argparse.Namespace:
@@ -365,26 +442,15 @@ def main() -> int:
         except ValueError as error:
             raise DownloadError("Image output directory must remain inside this module.") from error
 
-        total = len(filenames)
-        downloaded = 0
-        cached = 0
-        for index, filename in enumerate(sorted(filenames), start=1):
-            image_path = IMAGE_DIRECTORY / filename
-            if image_path.is_symlink():
-                raise DownloadError(f"Refusing a symlink image path: {image_path}")
-            if is_ready_jpeg(image_path, Image):
-                cached += 1
-                continue
-            raw_image = fetch_image(filename, opener)
-            resized_image = resize_jpeg(raw_image, Image, ImageOps)
-            write_atomic(image_path, resized_image)
-            downloaded += 1
-            if index % 100 == 0 or index == total:
-                print(f"Processed {index}/{total} image files...")
-
-        updated_records = write_overlay(readings, IMAGE_DIRECTORY, OVERLAY_XML)
+        available_images, downloaded, cached, skipped = download_images(
+            filenames, IMAGE_DIRECTORY, opener, Image, ImageOps
+        )
+        updated_records = write_overlay(
+            readings, IMAGE_DIRECTORY, OVERLAY_XML, available_images
+        )
         print(
             f"Done: {downloaded} downloaded, {cached} already optimized, "
+            f"{skipped} invalid or truncated images skipped, "
             f"{updated_records} demo readings linked to images."
         )
         return 0
