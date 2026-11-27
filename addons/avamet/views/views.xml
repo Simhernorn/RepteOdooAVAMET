@@ -1,60 +1,270 @@
 <odoo>
-  <data>
-    <!-- explicit list view definition -->
-<!--
-    <record model="ir.ui.view" id="avamet.list">
-      <field name="name">avamet list</field>
-      <field name="model">avamet.avamet</field>
-      <field name="arch" type="xml">
-        <list>
-          <field name="name"/>
-          <field name="value"/>
-          <field name="value2"/>
-        </list>
-      </field>
+    <record id="view_avamet_reading_search" model="ir.ui.view">
+        <field name="name">avamet.reading.search</field>
+        <field name="model">avamet.reading</field>
+        <field name="arch" type="xml">
+            <search string="Cerca de registres AVAMET">
+                <field name="live_updated"/>
+                <field name="live_temp"/>
+                <field name="live_humidity"/>
+                <field name="live_pressure"/>
+                <field name="live_wind_dir"/>
+                <field name="webcam1_file"/>
+                <filter string="Temperatura alta" name="hot" domain="[('live_temp', '&gt;=', 25)]"/>
+                <filter string="Amb pluja" name="rain" domain="[('live_rain_mm', '&gt;', 0)]"/>
+                <filter string="Vent fort" name="wind" domain="[('live_wind_kmh', '&gt;=', 30)]"/>
+                <filter string="Data" name="date" date="live_updated"/>
+                <group expand="0" string="Agrupa per">
+                    <filter string="Dia" name="group_by_day" context="{'group_by': 'live_updated:day'}"/>
+                    <filter string="Direcció del vent" name="group_by_wind" context="{'group_by': 'live_wind_dir'}"/>
+                </group>
+            </search>
+        </field>
     </record>
--->
 
-    <!-- actions opening views on models -->
-<!--
-    <record model="ir.actions.act_window" id="avamet.action_window">
-      <field name="name">avamet window</field>
-      <field name="res_model">avamet.avamet</field>
-      <field name="view_mode">list,form</field>
+    <record id="view_avamet_reading_list" model="ir.ui.view">
+        <field name="name">avamet.reading.list</field>
+        <field name="model">avamet.reading</field>
+        <field name="arch" type="xml">
+            <list string="Registres meteorològics" default_order="live_updated desc">
+                <field name="live_updated"/>
+                <field name="image_1" widget="image" options="{'size': [72, 48]}"/>
+                <field name="image_2" widget="image" options="{'size': [72, 48]}"/>
+                <field name="live_temp"/>
+                <field name="live_humidity"/>
+                <field name="live_pressure"/>
+                <field name="live_wind_kmh"/>
+                <field name="live_wind_dir"/>
+                <field name="live_gust_kmh"/>
+                <field name="live_rain_mm"/>
+            </list>
+        </field>
     </record>
--->
 
-    <!-- server action to the one above -->
-<!--
-    <record model="ir.actions.server" id="avamet.action_server">
-      <field name="name">avamet server</field>
-      <field name="model_id" ref="model_avamet_avamet"/>
-      <field name="state">code</field>
-      <field name="code">
-        action = {
-          "type": "ir.actions.act_window",
-          "view_mode": "list,form",
-          "res_model": model._name,
-        }
-      </field>
+    <record id="view_avamet_reading_form" model="ir.ui.view">
+        <field name="name">avamet.reading.form</field>
+        <field name="model">avamet.reading</field>
+        <field name="arch" type="xml">
+            <form string="Registre meteorològic AVAMET">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Lectura actual">
+                            <field name="live_updated"/>
+                            <field name="live_temp"/>
+                            <field name="live_temp_min"/>
+                            <field name="live_temp_max"/>
+                            <field name="live_humidity"/>
+                            <field name="live_pressure"/>
+                            <field name="live_wind_kmh"/>
+                            <field name="live_wind_dir"/>
+                            <field name="live_gust_kmh"/>
+                            <field name="live_rain_mm"/>
+                            <field name="live_rain_1h_mm"/>
+                        </group>
+                        <group string="Càmeres">
+                            <field name="image_1" widget="image" class="oe_avatar"/>
+                            <field name="webcam1_file"/>
+                            <field name="image_2" widget="image" class="oe_avatar"/>
+                            <field name="webcam2_file"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Històric (7 dies)">
+                            <group>
+                                <group string="Temperatura">
+                                    <field name="series_start_utc"/>
+                                    <field name="series_end_utc"/>
+                                    <field name="temp_points_7d"/>
+                                    <field name="temp_last_7d"/>
+                                    <field name="temp_min_7d"/>
+                                    <field name="temp_mean_7d"/>
+                                    <field name="temp_max_7d"/>
+                                </group>
+                                <group string="Humitat">
+                                    <field name="humidity_points_7d"/>
+                                    <field name="humidity_last_7d"/>
+                                    <field name="humidity_min_7d"/>
+                                    <field name="humidity_mean_7d"/>
+                                    <field name="humidity_max_7d"/>
+                                </group>
+                                <group string="Vent">
+                                    <field name="wind_points_7d"/>
+                                    <field name="wind_last_7d"/>
+                                    <field name="wind_min_7d"/>
+                                    <field name="wind_mean_7d"/>
+                                    <field name="wind_max_7d"/>
+                                </group>
+                                <group string="Pressió i pluja">
+                                    <field name="pressure_points_7d"/>
+                                    <field name="pressure_last_7d"/>
+                                    <field name="pressure_min_7d"/>
+                                    <field name="pressure_mean_7d"/>
+                                    <field name="pressure_max_7d"/>
+                                    <field name="last_wind_dir_deg"/>
+                                    <field name="last_rain_cumulative_mm"/>
+                                    <field name="pressure_change_3h"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Resum diari">
+                            <group>
+                                <field name="day"/>
+                                <field name="day_temp_min"/>
+                                <field name="day_temp_mean"/>
+                                <field name="day_temp_max"/>
+                                <field name="day_hum_min"/>
+                                <field name="day_hum_mean"/>
+                                <field name="day_hum_max"/>
+                                <field name="day_pres_min"/>
+                                <field name="day_pres_mean"/>
+                                <field name="day_pres_max"/>
+                                <field name="day_wind_dir"/>
+                                <field name="day_wind_mean"/>
+                                <field name="day_gust_max"/>
+                                <field name="day_rain_mm"/>
+                                <field name="day_index_n"/>
+                                <field name="day_index_p0"/>
+                            </group>
+                        </page>
+                        <page string="Resum mensual">
+                            <group>
+                                <field name="month"/>
+                                <field name="month_days"/>
+                                <field name="month_temp_min"/>
+                                <field name="month_temp_mean"/>
+                                <field name="month_temp_max"/>
+                                <field name="month_humidity_mean"/>
+                                <field name="month_pressure_mean"/>
+                                <field name="month_wind_mean"/>
+                                <field name="month_gust_max"/>
+                                <field name="month_rain_total"/>
+                                <field name="month_rainy_days"/>
+                            </group>
+                        </page>
+                        <page string="Previsió">
+                            <group>
+                                <field name="forecast_2d_date"/>
+                                <field name="forecast_2d_temp_min_c"/>
+                                <field name="forecast_2d_temp_mean_c"/>
+                                <field name="forecast_2d_temp_max_c"/>
+                                <field name="forecast_2d_precip_mm"/>
+                                <field name="forecast_2d_humidity_mean_pct"/>
+                                <field name="forecast_2d_wind_mean_kmh"/>
+                                <field name="forecast_2d_gust_max_kmh"/>
+                                <field name="forecast_2d_pressure_mean_hpa"/>
+                                <field name="forecast_2d_cloud_mean_pct"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
     </record>
--->
 
-    <!-- Top menu item -->
-<!--
-    <menuitem name="avamet" id="avamet.menu_root"/>
--->
-    <!-- menu categories -->
-<!--
-    <menuitem name="Menu 1" id="avamet.menu_1" parent="avamet.menu_root"/>
-    <menuitem name="Menu 2" id="avamet.menu_2" parent="avamet.menu_root"/>
--->
-    <!-- actions -->
-<!--
-    <menuitem name="List" id="avamet.menu_1_list" parent="avamet.menu_1"
-              action="avamet.action_window"/>
-    <menuitem name="Server to list" id="avamet" parent="avamet.menu_2"
-              action="avamet.action_server"/>
--->
-  </data>
+    <record id="action_avamet_reading" model="ir.actions.act_window">
+        <field name="name">Registres meteorològics</field>
+        <field name="res_model">avamet.reading</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_avamet_reading_search"/>
+    </record>
+
+    <record id="view_avamet_daily_summary_list" model="ir.ui.view">
+        <field name="name">avamet.daily.summary.list</field>
+        <field name="model">avamet.daily.summary</field>
+        <field name="arch" type="xml">
+            <list string="Resums diaris">
+                <field name="date"/>
+                <field name="reading_count"/>
+                <field name="summary_html" widget="html"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_avamet_daily_summary_calendar" model="ir.ui.view">
+        <field name="name">avamet.daily.summary.calendar</field>
+        <field name="model">avamet.daily.summary</field>
+        <field name="arch" type="xml">
+            <calendar string="Calendari de resums" date_start="date" mode="month" color="date">
+                <field name="reading_count"/>
+                <field name="summary_html"/>
+            </calendar>
+        </field>
+    </record>
+
+    <record id="view_avamet_daily_summary_form" model="ir.ui.view">
+        <field name="name">avamet.daily.summary.form</field>
+        <field name="model">avamet.daily.summary</field>
+        <field name="arch" type="xml">
+            <form string="Resum diari">
+                <header>
+                    <button name="action_view_readings" type="object" string="Veure registres" class="oe_highlight"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="date"/></h1>
+                    </div>
+                    <group>
+                        <field name="reading_count"/>
+                        <field name="summary_html" widget="html"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_avamet_daily_summary" model="ir.actions.act_window">
+        <field name="name">Resums diaris</field>
+        <field name="res_model">avamet.daily.summary</field>
+        <field name="view_mode">calendar,list,form</field>
+    </record>
+
+    <record id="view_avamet_json_import_form" model="ir.ui.view">
+        <field name="name">avamet.json.import.form</field>
+        <field name="model">avamet.json.import</field>
+        <field name="arch" type="xml">
+            <form string="Importa un registre JSON">
+                <group>
+                    <field name="json_payload" widget="text" placeholder='{"live_updated": "2026-11-27 08:00:00", ...}'/>
+                </group>
+                <footer>
+                    <button name="action_import_record" type="object" string="Validar i importar" class="oe_highlight"/>
+                    <button string="Cancel·lar" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_avamet_json_import" model="ir.actions.act_window">
+        <field name="name">Importa un registre JSON</field>
+        <field name="res_model">avamet.json.import</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_avamet_json_import_form"/>
+        <field name="target">new</field>
+    </record>
+
+    <record id="view_avamet_res_config_settings" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.avamet</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app name="avamet" string="AVAMET" data-string="AVAMET">
+                    <block title="Validació de registres">
+                        <setting string="Canvi numèric màxim" help="Rebutja registres amb valors numèrics que superen aquest canvi percentual respecte al registre més proper en el temps.">
+                            <field name="avamet_change_limit_percent"/>
+                            <span class="ms-2">%</span>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <menuitem id="menu_avamet_root" name="AVAMET"/>
+    <menuitem id="menu_avamet_readings" name="Registres" parent="menu_avamet_root" action="action_avamet_reading"/>
+    <menuitem id="menu_avamet_daily_summaries" name="Resums diaris" parent="menu_avamet_root" action="action_avamet_daily_summary"/>
+    <menuitem id="menu_avamet_json_import" name="Importa JSON" parent="menu_avamet_root" action="action_avamet_json_import"/>
 </odoo>

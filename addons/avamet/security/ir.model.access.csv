@@ -1,2 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_avamet_avamet,avamet.avamet,model_avamet_avamet,base.group_user,1,1,1,1
+access_avamet_reading_user,avamet.reading.user,model_avamet_reading,base.group_user,1,1,1,1
+access_avamet_daily_summary_user,avamet.daily.summary.user,model_avamet_daily_summary,base.group_user,1,0,0,0
+access_avamet_json_import_user,avamet.json.import.user,model_avamet_json_import,base.group_user,1,1,1,1
